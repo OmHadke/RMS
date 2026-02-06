@@ -1,49 +1,27 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
-import { Plus, Search, Trash2, Edit2, LogOut, Utensils, QrCode as QrIcon } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, LogOut, Utensils, QrCode as QrIcon, Image, Leaf, ToggleLeft, ToggleRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { storage, MenuItem, RestaurantProfile, RecommendationTag } from '../../../services/storage';
 
-// Mock Data
-interface MenuItem {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  calories: number;
-  image: string;
-  ingredients: string[];
-  category: string;
-}
-
-const INITIAL_MENU: MenuItem[] = [
-  {
-    id: '1',
-    name: 'Truffle Mushroom Burger',
-    description: 'Angus beef patty with truffle mayo, swiss cheese, and caramelized onions.',
-    price: 18.50,
-    calories: 850,
-    image: 'https://images.unsplash.com/photo-1717158776685-d4b7c346e1a7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=400',
-    ingredients: ['Beef', 'Truffle Oil', 'Swiss Cheese', 'Bun', 'Onion'],
-    category: 'Main Course'
-  },
-  {
-    id: '2',
-    name: 'Caesar Salad',
-    description: 'Crisp romaine lettuce, parmesan cheese, croutons, and caesar dressing.',
-    price: 12.00,
-    calories: 450,
-    image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&q=80&w=400',
-    ingredients: ['Lettuce', 'Parmesan', 'Croutons', 'Caesar Dressing', 'Chicken'],
-    category: 'Starters'
-  }
-];
+const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400';
+const RECOMMENDATION_TAGS: RecommendationTag[] = ['diabetic', 'fitness', 'kids', 'vegan'];
 
 export default function RestaurantDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'menu' | 'qr'>('menu');
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU);
+  const restaurantSession = storage.getSessions().restaurantId;
+  const restaurant = useMemo<RestaurantProfile | null>(() => {
+    if (!restaurantSession) {
+      return null;
+    }
+    return storage.getRestaurantById(restaurantSession);
+  }, [restaurantSession]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(
+    restaurant ? storage.getMenuItems(restaurant.id) : []
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
@@ -54,8 +32,11 @@ export default function RestaurantDashboard() {
     price: 0,
     calories: 0,
     category: 'Main Course',
-    image: '',
-    ingredients: []
+    image: DEFAULT_IMAGE,
+    ingredients: [],
+    cookingMethod: '',
+    recommendedFor: [],
+    available: true
   });
 
   const handleOpenModal = (item?: MenuItem) => {
@@ -70,8 +51,11 @@ export default function RestaurantDashboard() {
         price: 0,
         calories: 0,
         category: 'Main Course',
-        image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400', // Default placeholder
-        ingredients: []
+        image: DEFAULT_IMAGE,
+        ingredients: [],
+        cookingMethod: '',
+        recommendedFor: [],
+        available: true
       });
     }
     setIsModalOpen(true);
@@ -79,11 +63,18 @@ export default function RestaurantDashboard() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!restaurant) {
+      toast.error('Please log in as a restaurant first.');
+      navigate('/restaurant/auth');
+      return;
+    }
     if (editingItem) {
-      setMenuItems(menuItems.map(item => item.id === editingItem.id ? { ...formData, id: item.id } as MenuItem : item));
+      const updatedItem = { ...editingItem, ...formData } as MenuItem;
+      storage.updateMenuItem(updatedItem);
+      setMenuItems(menuItems.map(item => item.id === editingItem.id ? updatedItem : item));
       toast.success('Item updated successfully');
     } else {
-      const newItem = { ...formData, id: Math.random().toString(36).substr(2, 9) } as MenuItem;
+      const newItem = storage.addMenuItem(restaurant.id, formData as Omit<MenuItem, 'id' | 'restaurantId'>);
       setMenuItems([...menuItems, newItem]);
       toast.success('Item added successfully');
     }
@@ -92,10 +83,42 @@ export default function RestaurantDashboard() {
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this item?')) {
+      storage.deleteMenuItem(id);
       setMenuItems(menuItems.filter(item => item.id !== id));
       toast.success('Item deleted');
     }
   };
+
+  const handleLogout = () => {
+    storage.setRestaurantSession(null);
+    navigate('/');
+  };
+
+  const handleRecommendationToggle = (tag: RecommendationTag) => {
+    const current = formData.recommendedFor ?? [];
+    if (current.includes(tag)) {
+      setFormData({ ...formData, recommendedFor: current.filter(item => item !== tag) });
+      return;
+    }
+    setFormData({ ...formData, recommendedFor: [...current, tag] });
+  };
+
+  if (!restaurant) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center shadow-sm">
+          <h2 className="text-xl font-bold text-neutral-900 mb-2">Restaurant session required</h2>
+          <p className="text-sm text-neutral-500 mb-6">Please log in or register your restaurant to manage menu items.</p>
+          <button
+            onClick={() => navigate('/restaurant/auth')}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition-colors"
+          >
+            Go to Restaurant Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col">
@@ -105,7 +128,7 @@ export default function RestaurantDashboard() {
           <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center text-white">
             <Utensils size={24} />
           </div>
-          <h1 className="text-xl font-bold text-neutral-900">The Golden Spoon <span className="text-sm font-normal text-neutral-500 ml-2">Dashboard</span></h1>
+          <h1 className="text-xl font-bold text-neutral-900">{restaurant.name} <span className="text-sm font-normal text-neutral-500 ml-2">Dashboard</span></h1>
         </div>
         <div className="flex items-center gap-4">
           <button onClick={() => setActiveTab('menu')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'menu' ? 'bg-orange-100 text-orange-700' : 'text-neutral-600 hover:bg-neutral-50'}`}>
@@ -115,7 +138,7 @@ export default function RestaurantDashboard() {
             QR Code
           </button>
           <div className="h-6 w-px bg-neutral-200 mx-2" />
-          <button onClick={() => navigate('/')} className="text-neutral-500 hover:text-red-600 transition-colors">
+          <button onClick={handleLogout} className="text-neutral-500 hover:text-red-600 transition-colors">
             <LogOut size={20} />
           </button>
         </div>
@@ -142,6 +165,11 @@ export default function RestaurantDashboard() {
                     <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-neutral-700">
                       {item.calories} kcal
                     </div>
+                    {!item.available && (
+                      <div className="absolute bottom-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">
+                        Unavailable
+                      </div>
+                    )}
                   </div>
                   <div className="p-4">
                     <div className="flex justify-between items-start mb-2">
@@ -152,6 +180,13 @@ export default function RestaurantDashboard() {
                       <span className="text-lg font-bold text-neutral-900">${item.price.toFixed(2)}</span>
                     </div>
                     <p className="text-neutral-500 text-sm mb-4 line-clamp-2">{item.description}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-neutral-500 mb-4">
+                      {item.recommendedFor?.map(tag => (
+                        <span key={tag} className="px-2 py-0.5 bg-neutral-100 rounded-full uppercase tracking-wide">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                     
                     <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
                       <button onClick={() => handleOpenModal(item)} className="p-2 text-neutral-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
@@ -178,7 +213,7 @@ export default function RestaurantDashboard() {
               <p className="text-neutral-500 mb-8">Print this QR code and place it on your tables. Customers can scan it to view your menu and order.</p>
               
               <div className="bg-white p-4 border border-neutral-200 rounded-xl inline-block shadow-inner mb-8">
-                <QRCode value={`http://localhost:5173/menu/demo-restaurant-id`} size={200} />
+                <QRCode value={`${window.location.origin}/menu/${restaurant.id}`} size={200} />
               </div>
 
               <button className="w-full py-3 bg-neutral-900 text-white rounded-lg font-medium hover:bg-neutral-800 transition-colors">
@@ -224,6 +259,21 @@ export default function RestaurantDashboard() {
                     className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none h-24"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Image URL</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Image className="h-5 w-5 text-neutral-400" />
+                    </div>
+                    <input
+                      type="url"
+                      required
+                      value={formData.image}
+                      onChange={e => setFormData({ ...formData, image: e.target.value })}
+                      className="w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-1">Price ($)</label>
@@ -248,6 +298,32 @@ export default function RestaurantDashboard() {
                   </div>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Ingredients</label>
+                  <input
+                    type="text"
+                    value={(formData.ingredients ?? []).join(', ')}
+                    onChange={(event) =>
+                      setFormData({
+                        ...formData,
+                        ingredients: event.target.value
+                          .split(',')
+                          .map(item => item.trim())
+                          .filter(Boolean)
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                    placeholder="Beef, Truffle Oil, Swiss Cheese"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Cooking Methodology</label>
+                  <textarea
+                    value={formData.cookingMethod ?? ''}
+                    onChange={e => setFormData({ ...formData, cookingMethod: e.target.value })}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none h-20"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-1">Category</label>
                   <select 
                     value={formData.category}
@@ -259,6 +335,39 @@ export default function RestaurantDashboard() {
                     <option>Desserts</option>
                     <option>Beverages</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">Recommended for</label>
+                  <div className="flex flex-wrap gap-2">
+                    {RECOMMENDATION_TAGS.map((tag) => (
+                      <button
+                        type="button"
+                        key={tag}
+                        onClick={() => handleRecommendationToggle(tag)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors ${
+                          formData.recommendedFor?.includes(tag)
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-neutral-100 text-neutral-500'
+                        }`}
+                      >
+                        <Leaf size={12} className="inline-block mr-1" />
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-800">Availability</p>
+                    <p className="text-xs text-neutral-500">Mark whether this dish is currently available.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, available: !formData.available })}
+                    className="text-orange-600"
+                  >
+                    {formData.available ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                  </button>
                 </div>
                 
                 <div className="flex justify-end gap-3 pt-4">

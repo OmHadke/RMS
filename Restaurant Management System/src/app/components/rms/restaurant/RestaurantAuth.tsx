@@ -1,24 +1,60 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Store, Mail, Lock, ArrowRight, Loader2, Phone, MapPin, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { storage } from '../../../services/storage';
 
 export default function RestaurantAuth() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    contact: '',
+    openingHours: '',
+    email: '',
+    password: ''
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate API call
     setTimeout(() => {
+      if (isLogin) {
+        const existing = storage.findRestaurantByEmail(formData.email);
+        if (!existing || existing.password !== formData.password) {
+          setLoading(false);
+          toast.error('Invalid email or password');
+          return;
+        }
+        storage.setRestaurantSession(existing.id);
+        setLoading(false);
+        toast.success('Welcome back!');
+        navigate('/restaurant/dashboard');
+        return;
+      }
+
+      if (storage.findRestaurantByEmail(formData.email)) {
+        setLoading(false);
+        toast.error('Restaurant already registered with this email.');
+        return;
+      }
+
+      const newRestaurant = storage.addRestaurant({
+        name: formData.name,
+        address: formData.address,
+        contact: formData.contact,
+        openingHours: formData.openingHours,
+        email: formData.email,
+        password: formData.password
+      });
+      storage.setRestaurantSession(newRestaurant.id);
       setLoading(false);
-      toast.success(isLogin ? "Welcome back!" : "Restaurant registered successfully!");
-      // In a real app, we'd store the token here
+      toast.success('Restaurant registered successfully!');
       navigate('/restaurant/dashboard');
-    }, 1500);
+    }, 800);
   };
 
   return (
@@ -59,9 +95,67 @@ export default function RestaurantAuth() {
                   <input
                     type="text"
                     required={!isLogin}
+                    value={formData.name}
+                    onChange={(event) => setFormData({ ...formData, name: event.target.value })}
                     className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                     placeholder="e.g. The Golden Spoon"
                   />
+                </div>
+              </div>
+            )}
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Address</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MapPin className="h-5 w-5 text-neutral-400" />
+                  </div>
+                  <input
+                    type="text"
+                    required={!isLogin}
+                    value={formData.address}
+                    onChange={(event) => setFormData({ ...formData, address: event.target.value })}
+                    className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    placeholder="123 Food Street, City"
+                  />
+                </div>
+              </div>
+            )}
+
+            {!isLogin && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Contact</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Phone className="h-5 w-5 text-neutral-400" />
+                    </div>
+                    <input
+                      type="tel"
+                      required={!isLogin}
+                      value={formData.contact}
+                      onChange={(event) => setFormData({ ...formData, contact: event.target.value })}
+                      className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                      placeholder="+1 555-0100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Opening Hours</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Clock className="h-5 w-5 text-neutral-400" />
+                    </div>
+                    <input
+                      type="text"
+                      required={!isLogin}
+                      value={formData.openingHours}
+                      onChange={(event) => setFormData({ ...formData, openingHours: event.target.value })}
+                      className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                      placeholder="10:00 AM - 10:00 PM"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -75,6 +169,8 @@ export default function RestaurantAuth() {
                 <input
                   type="email"
                   required
+                  value={formData.email}
+                  onChange={(event) => setFormData({ ...formData, email: event.target.value })}
                   className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                   placeholder="name@restaurant.com"
                 />
@@ -90,6 +186,8 @@ export default function RestaurantAuth() {
                 <input
                   type="password"
                   required
+                  value={formData.password}
+                  onChange={(event) => setFormData({ ...formData, password: event.target.value })}
                   className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                   placeholder="••••••••"
                 />

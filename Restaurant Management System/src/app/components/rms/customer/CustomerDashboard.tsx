@@ -1,40 +1,18 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QrCode, Search, MapPin, Star, Clock, LogOut, Camera } from 'lucide-react';
 import { motion } from 'motion/react';
+import { storage } from '../../../services/storage';
 
-const FEATURED_RESTAURANTS = [
-  {
-    id: 'demo-restaurant-id',
-    name: 'The Golden Spoon',
-    cuisine: 'Modern American',
-    rating: 4.8,
-    distance: '0.5 mi',
-    image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=600',
-    time: '20-30 min'
-  },
-  {
-    id: '2',
-    name: 'Sakura Sushi',
-    cuisine: 'Japanese',
-    rating: 4.9,
-    distance: '1.2 mi',
-    image: 'https://images.unsplash.com/photo-1579027989536-b7b1f875659b?auto=format&fit=crop&q=80&w=600',
-    time: '30-45 min'
-  },
-  {
-    id: '3',
-    name: 'La Piazza',
-    cuisine: 'Italian',
-    rating: 4.5,
-    distance: '2.0 mi',
-    image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&q=80&w=600',
-    time: '25-40 min'
-  }
+const FALLBACK_IMAGES = [
+  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=600',
+  'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&q=80&w=600',
+  'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600'
 ];
 
 export default function CustomerDashboard() {
   const navigate = useNavigate();
+  const restaurants = useMemo(() => storage.getRestaurants(), []);
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">
@@ -52,7 +30,7 @@ export default function CustomerDashboard() {
               </div>
             </div>
           </div>
-          <button onClick={() => navigate('/')} className="text-neutral-400 hover:text-neutral-600">
+          <button onClick={() => { storage.setCustomerSession(null); navigate('/'); }} className="text-neutral-400 hover:text-neutral-600">
             <LogOut size={20} />
           </button>
         </div>
@@ -92,38 +70,56 @@ export default function CustomerDashboard() {
         </div>
 
         {/* Featured Section */}
-        <h2 className="text-lg font-bold text-neutral-900 mb-4">Featured Restaurants</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-neutral-900">Featured Restaurants</h2>
+          <button
+            onClick={() => navigate('/restaurant/auth')}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-500"
+          >
+            Register a Restaurant
+          </button>
+        </div>
         <div className="space-y-4">
-          {FEATURED_RESTAURANTS.map((restaurant, index) => (
-            <motion.div
-              key={restaurant.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              onClick={() => navigate(`/menu/${restaurant.id}`)}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm border border-neutral-100 cursor-pointer active:scale-[0.98] transition-transform"
-            >
-              <div className="h-40 relative">
-                <img src={restaurant.image} alt={restaurant.name} className="w-full h-full object-cover" />
-                <div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
-                  <Clock size={12} /> {restaurant.time}
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="flex justify-between items-start mb-1">
-                  <h3 className="text-lg font-bold text-neutral-900">{restaurant.name}</h3>
-                  <div className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-0.5 rounded text-xs font-bold">
-                    <Star size={12} fill="currentColor" /> {restaurant.rating}
+          {restaurants.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-neutral-200 p-6 text-center text-sm text-neutral-500">
+              No restaurants yet. Register a restaurant to generate a QR menu.
+            </div>
+          ) : (
+            restaurants.map((restaurant, index) => (
+              <motion.div
+                key={restaurant.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                onClick={() => navigate(`/menu/${restaurant.id}`)}
+                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-neutral-100 cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                <div className="h-40 relative">
+                  <img
+                    src={FALLBACK_IMAGES[index % FALLBACK_IMAGES.length]}
+                    alt={restaurant.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
+                    <Clock size={12} /> 20-30 min
                   </div>
                 </div>
-                <div className="flex items-center text-sm text-neutral-500 gap-2">
-                  <span>{restaurant.cuisine}</span>
-                  <span>•</span>
-                  <span>{restaurant.distance}</span>
+                <div className="p-4">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-lg font-bold text-neutral-900">{restaurant.name}</h3>
+                    <div className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-0.5 rounded text-xs font-bold">
+                      <Star size={12} fill="currentColor" /> 4.8
+                    </div>
+                  </div>
+                  <div className="flex items-center text-sm text-neutral-500 gap-2">
+                    <span>{restaurant.address}</span>
+                    <span>•</span>
+                    <span>{restaurant.openingHours}</span>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))
+          )}
         </div>
       </main>
     </div>

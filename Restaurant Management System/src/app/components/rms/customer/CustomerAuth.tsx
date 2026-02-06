@@ -1,24 +1,60 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Lock, ArrowRight, Loader2, Phone } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Loader2, Phone, Leaf, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { storage } from '../../../services/storage';
 
 export default function CustomerAuth() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    preference: 'vegetarian',
+    allergies: '',
+    password: ''
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate API call
     setTimeout(() => {
+      if (isLogin) {
+        const existing = storage.findCustomerByEmail(formData.email);
+        if (!existing || existing.password !== formData.password) {
+          setLoading(false);
+          toast.error('Invalid email or password');
+          return;
+        }
+        storage.setCustomerSession(existing.id);
+        setLoading(false);
+        toast.success('Welcome back!');
+        navigate('/customer/dashboard');
+        return;
+      }
+
+      if (storage.findCustomerByEmail(formData.email)) {
+        setLoading(false);
+        toast.error('Account already exists for this email.');
+        return;
+      }
+
+      const newCustomer = storage.addCustomer({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        preference: formData.preference,
+        allergies: formData.allergies,
+        password: formData.password
+      });
+      storage.setCustomerSession(newCustomer.id);
       setLoading(false);
-      toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
-      // Navigate to dashboard
+      toast.success('Account created successfully!');
       navigate('/customer/dashboard');
-    }, 1500);
+    }, 800);
   };
 
   return (
@@ -46,6 +82,8 @@ export default function CustomerAuth() {
                   <input
                     type="text"
                     required={!isLogin}
+                    value={formData.name}
+                    onChange={(event) => setFormData({ ...formData, name: event.target.value })}
                     className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                     placeholder="John Doe"
                   />
@@ -62,6 +100,8 @@ export default function CustomerAuth() {
                 <input
                   type="email"
                   required
+                  value={formData.email}
+                  onChange={(event) => setFormData({ ...formData, email: event.target.value })}
                   className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   placeholder="john@example.com"
                 />
@@ -78,9 +118,48 @@ export default function CustomerAuth() {
                   <input
                     type="tel"
                     required={!isLogin}
+                    value={formData.phone}
+                    onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
                     className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                     placeholder="+1 (555) 000-0000"
                   />
+                </div>
+              </div>
+            )}
+
+            {!isLogin && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Food Preference</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Leaf className="h-5 w-5 text-neutral-400" />
+                    </div>
+                    <select
+                      value={formData.preference}
+                      onChange={(event) => setFormData({ ...formData, preference: event.target.value })}
+                      className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    >
+                      <option value="vegetarian">Vegetarian</option>
+                      <option value="non-vegetarian">Non-vegetarian</option>
+                      <option value="vegan">Vegan</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Allergies (optional)</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <AlertCircle className="h-5 w-5 text-neutral-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={formData.allergies}
+                      onChange={(event) => setFormData({ ...formData, allergies: event.target.value })}
+                      className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="e.g. peanuts"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -94,6 +173,8 @@ export default function CustomerAuth() {
                 <input
                   type="password"
                   required
+                  value={formData.password}
+                  onChange={(event) => setFormData({ ...formData, password: event.target.value })}
                   className="block w-full pl-10 pr-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   placeholder="••••••••"
                 />
